@@ -85,8 +85,8 @@ def chat_with_openai(user_input):
     response = client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=message_history,
-        functions=functions,
-        function_call="auto"
+        functions=functions if allow_function_calls.get() else None,
+        function_call="auto" if allow_function_calls.get() else None
     )
 
     message = response.choices[0].message
@@ -116,7 +116,7 @@ def handle_user_input():
     input_entry.delete(0, tk.END)
 
     matched_keyword = find_best_match(user_input, keyword_map)
-    if matched_keyword:
+    if matched_keyword and allow_function_calls.get():
         file_path_str = keyword_map[matched_keyword]
         file_paths = [p.strip() for p in file_path_str.split(',') if p.strip()]
         result = open_files(file_paths)
@@ -165,9 +165,11 @@ functions = [
 # ---------- 建立 UI ----------
 window = tk.Tk()
 window.title("Chat Assistant")
-window.geometry("680x680")
+window.geometry("700x700")
 
 threshold_var = tk.IntVar(value=load_threshold_from_config())
+allow_function_calls = tk.BooleanVar(value=True)
+
 threshold_frame = tk.Frame(window)
 threshold_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
 
@@ -180,6 +182,17 @@ threshold_slider = tk.Scale(
     command=on_threshold_change
 )
 threshold_slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+options_frame = tk.Frame(window)
+options_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
+
+function_toggle = tk.Checkbutton(
+    options_frame,
+    text="允許執行檔案開啟功能",
+    variable=allow_function_calls,
+    font=("Microsoft JhengHei", 10)
+)
+function_toggle.pack(anchor="w")
 
 chat_area = scrolledtext.ScrolledText(window, wrap=tk.WORD, font=("Microsoft JhengHei", 12))
 chat_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
