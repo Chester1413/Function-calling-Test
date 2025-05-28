@@ -11,6 +11,11 @@ API_KEY_PATH = "sk_key.txt"
 KEYWORD_MAP_PATH = "functions.txt"
 CONFIG_PATH = "config.txt"
 
+# ---------- 對話歷史 ----------
+message_history = [
+    {"role": "system", "content": "你是一個能聊天並根據關鍵字開啟檔案的助理。"}
+]
+
 # ---------- 讀取 API 金鑰 ----------
 def load_api_key(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -73,26 +78,33 @@ def load_threshold_from_config(default=75):
             return default
     return default
 
-# ---------- GPT 聊天回應 ----------
+# ---------- GPT 聊天回應（支援上下文） ----------
 def chat_with_openai(user_input):
+    message_history.append({"role": "user", "content": user_input})
+
     response = client.chat.completions.create(
         model="gpt-4.1-nano",
-        messages=[
-            {"role": "system", "content": "你是一個能聊天並根據關鍵字開啟檔案的助理。"},
-            {"role": "user", "content": user_input}
-        ],
+        messages=message_history,
         functions=functions,
         function_call="auto"
     )
+
     message = response.choices[0].message
+
     if message.function_call:
         func_name = message.function_call.name
         arguments = json.loads(message.function_call.arguments)
         if func_name == "open_file":
-            return open_files([arguments["file_path"]])
+            result = open_files([arguments["file_path"]])
+            message_history.append({
+                "role": "assistant",
+                "content": f"（執行功能 {func_name}）{result}"
+            })
+            return result
         else:
             return "⚠️ 無法辨識的功能呼叫"
     else:
+        message_history.append({"role": "assistant", "content": message.content})
         return message.content
 
 # ---------- 處理使用者輸入 ----------
@@ -114,6 +126,15 @@ def handle_user_input():
 
     response = chat_with_openai(user_input)
     chat_area.insert(tk.END, f"🤖 助理：{response}\n")
+    chat_area.see(tk.END)
+
+# ---------- 清除對話歷史 ----------
+def clear_chat_history():
+    global message_history
+    message_history = [
+        {"role": "system", "content": "你是一個能聊天並根據關鍵字開啟檔案的助理。"}
+    ]
+    chat_area.insert(tk.END, "🧹 助理：對話歷史已清除。\n")
     chat_area.see(tk.END)
 
 # ---------- 門檻滑桿事件 ----------
@@ -143,7 +164,7 @@ functions = [
 
 # ---------- 建立 UI ----------
 window = tk.Tk()
-window.title("Chat Assistant 助理")
+window.title("Chat Assistant")
 window.geometry("680x680")
 
 threshold_var = tk.IntVar(value=load_threshold_from_config())
@@ -172,6 +193,9 @@ input_entry.bind("<Return>", lambda event: handle_user_input())
 
 send_button = tk.Button(input_frame, text="送出", command=handle_user_input, font=("Microsoft JhengHei", 12))
 send_button.pack(side=tk.RIGHT)
+
+clear_button = tk.Button(input_frame, text="清除歷史", command=clear_chat_history, font=("Microsoft JhengHei", 12))
+clear_button.pack(side=tk.RIGHT, padx=(5, 0))
 
 chat_area.insert(tk.END, "🤖 助理：您好，我是您的聊天助理！\n")
 
